@@ -305,34 +305,37 @@
       if (!state.running) return;
 
       // 플레이어 이동
-      if (state.keys.left) state.playerX -= 4.5;
-      if (state.keys.right) state.playerX += 4.5;
+      if (state.keys.left) state.playerX -= 5.0;
+      if (state.keys.right) state.playerX += 5.0;
       state.playerX = Math.max(8, Math.min(360 - 32 - 8, state.playerX));
 
       // 총알 발사
       if (state.cooldown > 0) state.cooldown--;
       if (state.keys.fire && state.cooldown === 0) {
         state.bullets.push({ x: state.playerX + 14, y: 424 });
-        state.cooldown = 12;
+        state.cooldown = 10;
         playTone(760, 240, 0.09, "square", 0.06);
       }
 
       // 총알 이동
-      state.bullets.forEach((b) => (b.y -= 8));
+      state.bullets.forEach((b) => (b.y -= 8.5));
       state.bullets = state.bullets.filter((b) => b.y > -12);
 
-      // 적 스폰 (점수에 따라 점점 빨라짐)
+      // 레벨 기반 점진적 난이도 (150점마다 레벨업)
+      const level = 1 + Math.floor(state.score / 150);
+
+      // 적 스폰 (초반엔 여유롭게, 레벨이 오를수록 촘촘하고 빠르게)
       state.spawnTimer--;
       if (state.spawnTimer <= 0) {
-        const type = Math.random() > 0.5 ? "A" : "B";
-        const speed = 1.4 + Math.min(2.6, state.score / 800);
+        const type = Math.random() > Math.max(0.25, 0.7 - level * 0.05) ? "B" : "A";
+        const speed = 0.65 + Math.min(2.35, (level - 1) * 0.22 + state.score / 2500);
         state.enemies.push({
           x: 12 + Math.random() * (360 - 48),
           y: -24,
           type,
           speed
         });
-        state.spawnTimer = Math.max(18, 48 - Math.floor(state.score / 120));
+        state.spawnTimer = Math.max(24, 75 - (level - 1) * 5);
       }
 
       // 적 이동 및 충돌 체크
@@ -340,11 +343,11 @@
         const e = state.enemies[i];
         e.y += e.speed;
 
-        // 총알 명중
+        // 총알 명중 (히트박스 판정 여유 있게 조정)
         let hit = false;
         for (let j = state.bullets.length - 1; j >= 0; j--) {
           const b = state.bullets[j];
-          if (b.x < e.x + 28 && b.x + 4 > e.x && b.y < e.y + 20 && b.y + 10 > e.y) {
+          if (b.x < e.x + 30 && b.x + 6 > e.x && b.y < e.y + 22 && b.y + 12 > e.y) {
             state.bullets.splice(j, 1);
             state.enemies.splice(i, 1);
             state.score += e.type === "A" ? 10 : 20;
@@ -412,13 +415,16 @@
       }
 
       // 상단 HUD
+      const level = 1 + Math.floor(state.score / 150);
       ctx.fillStyle = "#FDE047";
       ctx.font = "bold 14px Consolas, monospace";
-      ctx.fillText(`SCORE ${String(state.score).padStart(5, "0")}`, 12, 24);
+      ctx.fillText(`SCORE ${String(state.score).padStart(5, "0")}`, 10, 24);
       ctx.fillStyle = "#38BDF8";
-      ctx.fillText(`HI ${String(Math.max(hiScore, state.score)).padStart(5, "0")}`, 142, 24);
+      ctx.fillText(`LV.${level}`, 128, 24);
+      ctx.fillStyle = "#94A3B8";
+      ctx.fillText(`HI ${String(Math.max(hiScore, state.score)).padStart(5, "0")}`, 182, 24);
       ctx.fillStyle = "#F43F5E";
-      ctx.fillText("♥".repeat(Math.max(0, state.lives)), 298, 24);
+      ctx.fillText("♥".repeat(Math.max(0, state.lives)), 302, 24);
     }
 
     function loop() {
