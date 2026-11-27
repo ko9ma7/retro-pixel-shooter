@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PIXEL SPACE SHOOTER · KO9MA LAB</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #060913;
+      color: #F8FAFC;
+      font-family: "Courier New", Consolas, monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .cabinet {
+      width: 100%;
+      max-width: 400px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #38BDF8;
+      padding: 0 4px;
+    }
+    .mute-btn {
+      background: #1E293B;
+      border: 1px solid #475569;
+      color: #E2E8F0;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .screen-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      background: #020617;
+      border: 3px solid #2456A6;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(36, 86, 166, 0.35);
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.84);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      gap: 14px;
+    }
+    .overlay.hidden { display: none; }
+    .overlay h1 {
+      font-size: 24px;
+      color: #FDE047;
+      letter-spacing: 1px;
+    }
+    .overlay p {
+      font-size: 13px;
+      color: #CBD5E1;
+      line-height: 1.5;
+    }
+    .start-btn {
+      background: #22C55E;
+      color: #052E16;
+      border: none;
+      padding: 12px 28px;
+      font-size: 16px;
+      font-weight: 900;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #15803D;
+    }
+    .start-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #15803D; }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-top: 2px;
+    }
+    .dpad {
+      display: flex;
+      gap: 10px;
+    }
+    .ctrl-btn {
+      height: 54px;
+      min-width: 68px;
+      background: #1E293B;
+      border: 2px solid #475569;
+      border-radius: 12px;
+      color: #F8FAFC;
+      font-size: 20px;
+      font-weight: 900;
+      cursor: pointer;
+      touch-action: none;
+    }
+    .ctrl-btn:active, .ctrl-btn.active {
+      background: #334155;
+      border-color: #38BDF8;
+    }
+    .fire-btn {
+      flex: 1;
+      max-width: 130px;
+      background: #DC2626;
+      border-color: #FCA5A5;
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+    .fire-btn:active, .fire-btn.active {
+      background: #B91C1C;
+    }
+  </style>
+</head>
+<body>
+  <div class="cabinet">
+    <div class="topbar">
+      <span>KO9MA LAB · 8-BIT SHOOTER</span>
+      <button class="mute-btn" id="muteBtn" type="button">🔊 SOUND ON</button>
+    </div>
+
+    <div class="screen-wrap">
+      <canvas id="game" width="360" height="480"></canvas>
+      <div class="overlay" id="overlay">
+        <h1 id="overlayTitle">PIXEL SHOOTER</h1>
+        <p id="overlayDesc">PC: ◀ ▶ 이동 / SPACE 발사<br/>모바일: 하단 터치 버튼으로 조종하세요!</p>
+        <button class="start-btn" id="startBtn" type="button">START GAME</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="dpad">
+        <button class="ctrl-btn" id="leftBtn" type="button" aria-label="Left">◀</button>
+        <button class="ctrl-btn" id="rightBtn" type="button" aria-label="Right">▶</button>
+      </div>
+      <button class="ctrl-btn fire-btn" id="fireBtn" type="button">FIRE</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayDesc = document.getElementById("overlayDesc");
+    const startBtn = document.getElementById("startBtn");
+    const muteBtn = document.getElementById("muteBtn");
+
+    // 2D 픽셀 스프라이트 (외부 이미지 파일 0개)
+    const SHIP_SPRITE = [
+      "00011000",
+      "00111100",
+      "01122110",
+      "11122111",
+      "11111111",
+      "10100101"
+    ];
+    const ALIEN_A = [
+      "00100100",
+      "00011000",
+      "00111100",
+      "01101110",
+      "11111111",
+      "10100101"
+    ];
+    const ALIEN_B = [
+      "00111100",
+      "01111110",
+      "11011011",
+      "11111111",
+      "00100100",
+      "01000010"
+    ];
+
+    // Web Audio API 8비트 사운드 합성기
+    let audioCtx = null;
+    let muted = false;
+
+    function playTone(freqStart, freqEnd, duration, type = "square", gainVal = 0.08) {
+      if (muted || !audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freqStart, now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), now + duration);
+      gain.gain.setValueAtTime(gainVal, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+
+    muteBtn.addEventListener("click", () => {
+      muted = !muted;
+      muteBtn.textContent = muted ? "🔇 SOUND OFF" : "🔊 SOUND ON";
+    });
+
+    const HI_KEY = "ko9ma_pixel_shooter_hi";
+    let hiScore = Number(localStorage.getItem(HI_KEY) || 0);
+
+    const state = {
+      running: false,
+      score: 0,
+      lives: 3,
+      playerX: 164,
+      bullets: [],
+      enemies: [],
+      particles: [],
+      stars: Array.from({ length: 40 }, () => ({
+        x: Math.random() * 360,
+        y: Math.random() * 480,
+        s: Math.random() * 1.5 + 0.6
+      })),
+      keys: { left: false, right: false, fire: false },
+      cooldown: 0,
+      spawnTimer: 0
+    };
+
+    function drawSprite(sprite, x, y, scale, palette) {
+      for (let r = 0; r < sprite.length; r++) {
+        for (let c = 0; c < sprite[r].length; c++) {
+          const ch = sprite[r][c];
+          if (ch === "0") continue;
+          ctx.fillStyle = palette[ch] || "#FFFFFF";
+          ctx.fillRect(Math.floor(x + c * scale), Math.floor(y + r * scale), scale, scale);
+        }
+      }
+    }
+
+    function spawnExplosion(x, y, color) {
+      for (let i = 0; i < 10; i++) {
+        state.particles.push({
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 4,
+          vy: (Math.random() - 0.5) * 4,
+          life: 20,
+          color
+        });
+      }
+    }
+
+    function resetGame() {
+      state.running = true;
+      state.score = 0;
+      state.lives = 3;
+      state.playerX = 164;
+      state.bullets = [];
+      state.enemies = [];
+      state.particles = [];
+      state.cooldown = 0;
+      state.spawnTimer = 20;
+      overlay.classList.add("hidden");
+    }
+
+    function endGame() {
+      state.running = false;
+      playTone(300, 60, 0.45, "sawtooth", 0.12);
+      if (state.score > hiScore) {
+        hiScore = state.score;
+        localStorage.setItem(HI_KEY, String(hiScore));
+      }
+      overlayTitle.textContent = "GAME OVER";
+      overlayDesc.innerHTML = `SCORE: <b>${state.score}</b> · HI-SCORE: <b>${hiScore}</b><br/>다시 도전해 보세요!`;
+      startBtn.textContent = "PLAY AGAIN";
+      overlay.classList.remove("hidden");
+    }
+
+    function update() {
+      // 배경 별 스크롤
+      for (const st of state.stars) {
+        st.y += st.s;
+        if (st.y > 480) {
+          st.y = 0;
+          st.x = Math.random() * 360;
+        }
+      }
+      if (!state.running) return;
+
+      // 플레이어 이동
+      if (state.keys.left) state.playerX -= 4.5;
+      if (state.keys.right) state.playerX += 4.5;
+      state.playerX = Math.max(8, Math.min(360 - 32 - 8, state.playerX));
+
+      // 총알 발사
+      if (state.cooldown > 0) state.cooldown--;
+      if (state.keys.fire && state.cooldown === 0) {
+        state.bullets.push({ x: state.playerX + 14, y: 424 });
+        state.cooldown = 12;
+        playTone(760, 240, 0.09, "square", 0.06);
+      }
+
+      // 총알 이동
+      state.bullets.forEach((b) => (b.y -= 8));
+      state.bullets = state.bullets.filter((b) => b.y > -12);
+
+      // 적 스폰 (점수에 따라 점점 빨라짐)
+      state.spawnTimer--;
+      if (state.spawnTimer <= 0) {
+        const type = Math.random() > 0.5 ? "A" : "B";
+        const speed = 1.4 + Math.min(2.6, state.score / 800);
+        state.enemies.push({
+          x: 12 + Math.random() * (360 - 48),
+          y: -24,
+          type,
+          speed
+        });
+        state.spawnTimer = Math.max(18, 48 - Math.floor(state.score / 120));
+      }
+
+      // 적 이동 및 충돌 체크
+      for (let i = state.enemies.length - 1; i >= 0; i--) {
+        const e = state.enemies[i];
+        e.y += e.speed;
+
+        // 총알 명중
+        let hit = false;
+        for (let j = state.bullets.length - 1; j >= 0; j--) {
+          const b = state.bullets[j];
+          if (b.x < e.x + 28 && b.x + 4 > e.x && b.y < e.y + 20 && b.y + 10 > e.y) {
+            state.bullets.splice(j, 1);
+            state.enemies.splice(i, 1);
+            state.score += e.type === "A" ? 10 : 20;
+            spawnExplosion(e.x + 14, e.y + 10, e.type === "A" ? "#F43F5E" : "#F59E0B");
+            playTone(220, 70, 0.14, "sawtooth", 0.08);
+            hit = true;
+            break;
+          }
+        }
+        if (hit) continue;
+
+        // 바닥 도달 또는 플레이어 충돌
+        const hitPlayer = e.x < state.playerX + 30 && e.x + 28 > state.playerX && e.y + 20 > 430 && e.y < 454;
+        if (hitPlayer || e.y > 470) {
+          state.enemies.splice(i, 1);
+          state.lives--;
+          spawnExplosion(state.playerX + 16, 440, "#38BDF8");
+          playTone(150, 50, 0.25, "sawtooth", 0.1);
+          if (state.lives <= 0) {
+            endGame();
+            return;
+          }
+        }
+      }
+
+      // 파티클 업데이트
+      state.particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+      });
+      state.particles = state.particles.filter((p) => p.life > 0);
+    }
+
+    function render() {
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(0, 0, 360, 480);
+
+      // 별
+      ctx.fillStyle = "#475569";
+      for (const st of state.stars) {
+        ctx.fillRect(Math.floor(st.x), Math.floor(st.y), 2, 2);
+      }
+
+      // 플레이어 우주선
+      drawSprite(SHIP_SPRITE, state.playerX, 430, 4, { "1": "#22C55E", "2": "#38BDF8" });
+
+      // 총알
+      ctx.fillStyle = "#FDE047";
+      for (const b of state.bullets) {
+        ctx.fillRect(Math.floor(b.x), Math.floor(b.y), 4, 10);
+      }
+
+      // 적 외계인
+      for (const e of state.enemies) {
+        const sp = e.type === "A" ? ALIEN_A : ALIEN_B;
+        const col = e.type === "A" ? "#F43F5E" : "#F59E0B";
+        drawSprite(sp, e.x, e.y, 3.5, { "1": col });
+      }
+
+      // 파티클
+      for (const p of state.particles) {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.floor(p.x), Math.floor(p.y), 3, 3);
+      }
+
+      // 상단 HUD
+      ctx.fillStyle = "#FDE047";
+      ctx.font = "bold 14px Consolas, monospace";
+      ctx.fillText(`SCORE ${String(state.score).padStart(5, "0")}`, 12, 24);
+      ctx.fillStyle = "#38BDF8";
+      ctx.fillText(`HI ${String(Math.max(hiScore, state.score)).padStart(5, "0")}`, 142, 24);
+      ctx.fillStyle = "#F43F5E";
+      ctx.fillText("♥".repeat(Math.max(0, state.lives)), 298, 24);
+    }
+
+    function loop() {
+      update();
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    // 키보드 입력
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") state.keys.left = true;
+      if (e.key === "ArrowRight") state.keys.right = true;
+      if (e.key === " ") {
+        e.preventDefault();
+        state.keys.fire = true;
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowLeft") state.keys.left = false;
+      if (e.key === "ArrowRight") state.keys.right = false;
+      if (e.key === " ") state.keys.fire = false;
+    });
+
+    // 모바일/마우스 터치 입력 바인딩
+    function bindBtn(el, key) {
+      const on = (ev) => {
+        ev.preventDefault();
+        state.keys[key] = true;
+        el.classList.add("active");
+      };
+      const off = (ev) => {
+        ev.preventDefault();
+        state.keys[key] = false;
+        el.classList.remove("active");
+      };
+      el.addEventListener("touchstart", on, { passive: false });
+      el.addEventListener("touchend", off, { passive: false });
+      el.addEventListener("touchcancel", off, { passive: false });
+      el.addEventListener("mousedown", on);
+      el.addEventListener("mouseup", off);
+      el.addEventListener("mouseleave", off);
+    }
+
+    bindBtn(document.getElementById("leftBtn"), "left");
+    bindBtn(document.getElementById("rightBtn"), "right");
+    bindBtn(document.getElementById("fireBtn"), "fire");
+
+    startBtn.addEventListener("click", () => {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+      playTone(440, 880, 0.15, "square", 0.08);
+      resetGame();
+    });
+
+    loop();
+  </script>
+</body>
+</html>
